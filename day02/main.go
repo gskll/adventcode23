@@ -6,41 +6,37 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"unicode"
 )
 
 var cubes = map[string]int{"red": 12, "green": 13, "blue": 14}
 
-func parseLine(line string) (id int, maxCubes map[string]int) {
-	gameData := strings.Split(line, ": ")
-	idStr := ""
-	for _, r := range gameData[0] {
-		if unicode.IsDigit(r) {
-			idStr += string(r)
-		}
-	}
-	id, err := strconv.Atoi(idStr)
+func parseGameId(gameId string) (int, error) {
+	parts := strings.Fields(gameId)
+	id, err := strconv.Atoi(parts[1])
 	if err != nil {
-		panic(err)
+		return 0, err
 	}
-	setsStr := strings.Split(gameData[1], "; ")
-	maxCubes = map[string]int{"red": 0, "green": 0, "blue": 0}
+	return id, nil
+}
 
-	for _, setStr := range setsStr {
-		sets := strings.Split(setStr, ", ")
-		for _, set := range sets {
-			tmp := strings.Split(set, " ")
-			color := tmp[1]
-			numCubes, err := strconv.Atoi(tmp[0])
+func calculateMaxCubes(setsStr string) (map[string]int, error) {
+	maxCubes := map[string]int{"red": 0, "green": 0, "blue": 0}
+
+	for _, set := range strings.Split(setsStr, "; ") {
+		for _, colorStr := range strings.Split(set, ", ") {
+			parts := strings.Fields(colorStr)
+			numCubes, err := strconv.Atoi(parts[0])
 			if err != nil {
-				panic(err)
+				return nil, err
 			}
-			if maxCubes[color] < numCubes {
+			color := parts[1]
+
+			if numCubes > maxCubes[color] {
 				maxCubes[color] = numCubes
 			}
 		}
 	}
-	return
+	return maxCubes, nil
 }
 
 func main() {
@@ -56,24 +52,30 @@ func main() {
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		line := scanner.Text()
-		id, maxCubes := parseLine(line)
-		gamePossible := true
+		gameData := strings.SplitN(line, ": ", 2)
+		id, err := parseGameId(gameData[0])
+		if err != nil {
+			panic(err)
+		}
+		maxCubes, err := calculateMaxCubes(gameData[1])
+		if err != nil {
+			panic(err)
+		}
 
+		gamePossible := true
 		power := 1
 		for color, value := range maxCubes {
-			fmt.Println(color, value)
 			if value > cubes[color] {
 				gamePossible = false
 			}
 			power *= value
 		}
-		fmt.Println(power)
 		if gamePossible {
 			sum += id
 		}
 		powerSum += power
 	}
 
-	fmt.Println("The sum for part 1: ", sum) // 2101
-	fmt.Println("The sum of powers for part 2: ", powerSum)
+	fmt.Println("The sum for part 1: ", sum)                // 2101
+	fmt.Println("The sum of powers for part 2: ", powerSum) // 58269
 }
