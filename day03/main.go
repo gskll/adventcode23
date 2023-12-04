@@ -11,13 +11,20 @@ import (
 )
 
 type (
-	number struct {
+	symbol struct {
+		value byte
+		index int
+		line  int
+	}
+	symbols []symbol
+	number  struct {
 		value string
 		start int
 		end   int
 		used  bool
 	}
 	numbers []number
+	gears   map[string][]int
 )
 
 func (n numbers) values() []string {
@@ -28,7 +35,22 @@ func (n numbers) values() []string {
 	return values
 }
 
-func parseLine(line, prevLine string, prevLineNumbers numbers) (int, numbers) {
+func (s symbols) gears() symbols {
+	var gears symbols
+	for _, symbol := range s {
+		if symbol.value == '*' {
+			gears = append(gears, symbol)
+		}
+	}
+	return gears
+}
+
+func parseLine(
+	line, prevLine string,
+	prevLineNumbers numbers,
+	potentialGears gears,
+	lineCount int,
+) (int, numbers, gears) {
 	sum := 0
 	num := ""
 	numStart := 0
@@ -43,16 +65,26 @@ func parseLine(line, prevLine string, prevLineNumbers numbers) (int, numbers) {
 
 		if num != "" && (!unicode.IsDigit(r) || i == len(line)-1) {
 			numEnd := numStart + len(num) - 1
-			if hasAdjacentSymbols(numStart, numEnd, line, prevLine) {
+			adjacentSymbols := adjacentSymbols(numStart, numEnd, line, prevLine, lineCount)
+			if len(adjacentSymbols) > 0 {
 				numVal, err := strconv.Atoi(num)
 				if err != nil {
 					panic(err)
 				}
 				sum += numVal
+
+				gears := adjacentSymbols.gears()
+				if len(gears) > 0 {
+					for _, sym := range gears {
+						gearKey := fmt.Sprintf("%d-%d", sym.line, sym.index)
+						potentialGears[gearKey] = append(potentialGears[gearKey], numVal)
+					}
+				}
 			} else {
 				number := number{num, numStart, numEnd, false}
 				potentialNumbers = append(potentialNumbers, number)
 			}
+
 			num = ""
 		}
 
@@ -69,7 +101,7 @@ func parseLine(line, prevLine string, prevLineNumbers numbers) (int, numbers) {
 			}
 		}
 	}
-	return sum, potentialNumbers
+	return sum, potentialNumbers, potentialGears
 }
 
 func isSymbol(b byte) bool {
@@ -77,31 +109,29 @@ func isSymbol(b byte) bool {
 	return r != '.' && !unicode.IsDigit(r)
 }
 
-func checkLeft(i int, line string) bool {
-	return i > 0 && isSymbol(line[i-1])
-}
-
-func checkRight(i int, line string) bool {
-	return i < len(line)-1 && isSymbol(line[i+1])
-}
-
-func hasAdjacentSymbols(start, end int, currLine, prevLine string) bool {
+func adjacentSymbols(start, end int, currLine, prevLine string, lineCount int) symbols {
+	symbols := symbols{}
 	for i := start; i <= end; i++ {
-		if i == start && checkLeft(i, currLine) {
-			return true
+		if i == start && i > 0 && isSymbol(currLine[i-1]) {
+			symbols = append(symbols, symbol{currLine[i-1], i - 1, lineCount})
 		}
-		if i == end && checkRight(i, currLine) {
-			return true
+		if i == end && i < len(currLine)-1 && isSymbol(currLine[i+1]) {
+			symbols = append(symbols, symbol{currLine[i+1], i + 1, lineCount})
 		}
 		if prevLine != "" {
-			if isSymbol(prevLine[i]) ||
-				(i == start && checkLeft(i, prevLine)) ||
-				(i == end && checkRight(i, prevLine)) {
-				return true
+			if isSymbol(prevLine[i]) {
+				symbols = append(symbols, symbol{prevLine[i], i, lineCount - 1})
+			}
+			if i == start && i > 0 && isSymbol(prevLine[i-1]) {
+				symbols = append(symbols, symbol{prevLine[i-1], i - 1, lineCount - 1})
+			}
+			if i == end && i < len(prevLine)-1 && isSymbol(prevLine[i+1]) {
+				symbols = append(symbols, symbol{prevLine[i+1], i + 1, lineCount - 1})
 			}
 		}
 	}
-	return false
+
+	return symbols
 }
 
 func main() {
@@ -121,20 +151,38 @@ func calculateSum(input string) {
 	}
 	defer file.Close()
 
+	lineCount := 0
 	totalSum := 0
 	prevLine, currLine := "", ""
-	prevLineNumbers := numbers{}
+	prevLineNumbers := numbers{}  // numbers that have no matching symbols on the current/prev line but may on the next line
+	prevPotentialGears := gears{} // all '*' symbols with their adjacent numbers
 	scanner := bufio.NewScanner(file)
 	for scanner.Scan() {
 		prevLine = currLine
 		currLine = scanner.Text()
-		sum, potentialNumbers := parseLine(currLine, prevLine, prevLineNumbers)
+		sum, potentialNumbers, potentialGears := parseLine(
+			currLine,
+			prevLine,
+			prevLineNumbers,
+			prevPotentialGears,
+			lineCount,
+		)
+		prevPotentialGears = potentialGears
 		prevLineNumbers = potentialNumbers
 		totalSum += sum
+		lineCount++
 	}
 	if err := scanner.Err(); err != nil {
 		panic(err)
 	}
 
+	gearSum := 0
+	for _, nums := range prevPotentialGears {
+		if len(nums) == 2 {
+			gearSum += nums[0] * nums[1]
+		}
+	}
+
 	fmt.Println("Part 1 sum:", totalSum, "("+input+")")
+	fmt.Println("Part 2 sum:", gearSum, "("+input+")")
 }
