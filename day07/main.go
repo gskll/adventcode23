@@ -12,6 +12,15 @@ import (
 	"time"
 )
 
+const (
+	joker = '2' - 1 - '1'
+	ace   = '9' + 5 - '1'
+	king  = '9' + 4 - '1'
+	queen = '9' + 3 - '1'
+	jack  = '9' + 2 - '1'
+	ten   = '9' + 1 - '1'
+)
+
 type handType int
 
 const (
@@ -31,17 +40,18 @@ type hand struct {
 	handType handType
 }
 
-func parseHand(line string) (hand, error) {
-	var h hand
+func parseHand(line string) (hand, hand, error) {
+	var h, h2 hand
 	parts := strings.Fields(line)
 	handString := parts[0]
 	bidString := parts[1]
 
-	cmp := parseHandValues(handString)
-	ht := parseHandType(handString)
+	cmp, cmp2 := parseHandValues(handString)
+	ht := parseHandType(cmp, false)
+	ht2 := parseHandType(cmp2, true)
 	bid, err := strconv.Atoi(bidString)
 	if err != nil {
-		return h, err
+		return h, h2, err
 	}
 
 	h.val = handString
@@ -49,14 +59,33 @@ func parseHand(line string) (hand, error) {
 	h.bid = bid
 	h.handType = ht
 
-	return h, nil
+	h2.val = handString
+	h2.cmp = cmp2
+	h2.bid = bid
+	h2.handType = ht2
+
+	return h, h2, nil
 }
 
-func parseHandType(hand string) (ht handType) {
+func parseHandType(hand string, withJoker bool) (ht handType) {
 	frequency := make(map[byte]int, len(hand))
 	for i := range hand {
 		frequency[hand[i]]++
 	}
+
+	if withJoker {
+		var maxFreqCard byte = joker
+		for cardKey := range frequency {
+			if cardKey != joker && (maxFreqCard == joker || frequency[cardKey] > frequency[maxFreqCard]) {
+				maxFreqCard = cardKey
+			}
+		}
+		if jokerFreq, exists := frequency[joker]; exists && maxFreqCard != joker {
+			frequency[maxFreqCard] += jokerFreq
+			delete(frequency, joker)
+		}
+	}
+
 	maxFreq := 0
 	for _, v := range frequency {
 		if v > maxFreq {
@@ -87,25 +116,32 @@ func parseHandType(hand string) (ht handType) {
 	return
 }
 
-func parseHandValues(hand string) string {
+func parseHandValues(hand string) (string, string) {
 	var parsed []byte
+	var parsed2 []byte
 	for i := range hand {
 		switch hand[i] {
 		case 'T':
-			parsed = append(parsed, '9'+1-'1')
+			parsed = append(parsed, ten)
+			parsed2 = append(parsed2, ten)
 		case 'J':
-			parsed = append(parsed, '9'+2-'1')
+			parsed = append(parsed, jack)
+			parsed2 = append(parsed2, joker)
 		case 'Q':
-			parsed = append(parsed, '9'+3-'1')
+			parsed = append(parsed, queen)
+			parsed2 = append(parsed2, queen)
 		case 'K':
-			parsed = append(parsed, '9'+4-'1')
+			parsed = append(parsed, king)
+			parsed2 = append(parsed2, king)
 		case 'A':
-			parsed = append(parsed, '9'+5-'1')
+			parsed = append(parsed, ace)
+			parsed2 = append(parsed2, ace)
 		default:
 			parsed = append(parsed, hand[i]-'1')
+			parsed2 = append(parsed2, hand[i]-'1')
 		}
 	}
-	return string(parsed)
+	return string(parsed), string(parsed2)
 }
 
 func sortHands(hands []hand) []hand {
@@ -113,7 +149,7 @@ func sortHands(hands []hand) []hand {
 		if n := cmp.Compare(a.handType, b.handType); n != 0 {
 			return n
 		}
-		return cmp.Compare(a.cmp, b.cmp)
+		return cmp.Compare(string(a.cmp), string(b.cmp))
 	})
 	return hands
 }
@@ -136,16 +172,21 @@ func solve(input string) {
 	scanner := bufio.NewScanner(file)
 
 	var hands []hand
+	var hands2 []hand
 	for scanner.Scan() {
-		hand, err := parseHand(scanner.Text())
+		hand, hand2, err := parseHand(scanner.Text())
 		if err != nil {
 			panic(err)
 		}
 		hands = append(hands, hand)
+		hands2 = append(hands2, hand2)
 	}
 
 	winnings := calculateWinnings(hands)
-	fmt.Println("Part 1 solution:", winnings) // 247823654
+	fmt.Println("Part 1 solution:", winnings, winnings == 247823654) // 247823654
+
+	winnings2 := calculateWinnings(hands2)
+	fmt.Println("Part 2 solution:", winnings2, winnings2 == 245461700) // 245461700
 }
 
 func main() {
