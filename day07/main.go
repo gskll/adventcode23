@@ -47,8 +47,8 @@ func parseHand(line string) (hand, hand, error) {
 	bidString := parts[1]
 
 	cmp, cmp2 := parseHandValues(handString)
-	ht := parseHandType(cmp, false)
-	ht2 := parseHandType(cmp2, true)
+	ht := parseHandType(cmp)
+	ht2 := parseHandType(cmp2)
 	bid, err := strconv.Atoi(bidString)
 	if err != nil {
 		return h, h2, err
@@ -67,30 +67,30 @@ func parseHand(line string) (hand, hand, error) {
 	return h, h2, nil
 }
 
-func parseHandType(hand string, withJoker bool) (ht handType) {
+func parseHandType(hand string) (ht handType) {
 	frequency := make(map[byte]int, len(hand))
+	jokerCount := 0
 	for i := range hand {
-		frequency[hand[i]]++
+		if hand[i] == joker {
+			jokerCount++
+		} else {
+			frequency[hand[i]]++
+		}
 	}
 
-	if withJoker {
-		var maxFreqCard byte = joker
+	var maxFreqCard byte
+	if jokerCount < 5 {
 		for cardKey := range frequency {
-			if cardKey != joker && (maxFreqCard == joker || frequency[cardKey] > frequency[maxFreqCard]) {
+			if maxFreqCard == 0 || frequency[cardKey] > frequency[maxFreqCard] {
 				maxFreqCard = cardKey
 			}
 		}
-		if jokerFreq, exists := frequency[joker]; exists && maxFreqCard != joker {
-			frequency[maxFreqCard] += jokerFreq
-			delete(frequency, joker)
-		}
-	}
 
-	maxFreq := 0
-	for _, v := range frequency {
-		if v > maxFreq {
-			maxFreq = v
+		if jokerCount > 0 {
+			frequency[maxFreqCard] += jokerCount
 		}
+	} else {
+		frequency[jack] = 5
 	}
 
 	switch len(frequency) {
@@ -99,13 +99,13 @@ func parseHandType(hand string, withJoker bool) (ht handType) {
 	case 4:
 		ht = onePair
 	case 3:
-		if maxFreq == 2 {
+		if frequency[maxFreqCard] == 2 {
 			ht = twoPair
 		} else {
 			ht = threeOfAKind
 		}
 	case 2:
-		if maxFreq == 3 {
+		if frequency[maxFreqCard] == 3 {
 			ht = fullHouse
 		} else {
 			ht = fourOfAKind
