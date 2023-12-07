@@ -2,9 +2,11 @@ package main
 
 import (
 	"bufio"
+	"cmp"
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +25,8 @@ const (
 )
 
 type hand struct {
-	val      []byte
+	val      string // debugging only
+	cmp      string
 	bid      int
 	handType handType
 }
@@ -31,25 +34,28 @@ type hand struct {
 func parseHand(line string) (hand, error) {
 	var h hand
 	parts := strings.Fields(line)
+	handString := parts[0]
+	bidString := parts[1]
 
-	val := parseHandValues(parts[0])
-	bid, err := strconv.Atoi(parts[1])
+	cmp := parseHandValues(handString)
+	ht := parseHandType(handString)
+	bid, err := strconv.Atoi(bidString)
 	if err != nil {
 		return h, err
 	}
-	ht := parseHandType(val)
 
-	h.val = val
+	h.val = handString
+	h.cmp = cmp
 	h.bid = bid
 	h.handType = ht
 
 	return h, nil
 }
 
-func parseHandType(handVal []byte) (ht handType) {
-	frequency := make(map[byte]int, len(handVal))
-	for i := range handVal {
-		frequency[handVal[i]]++
+func parseHandType(hand string) (ht handType) {
+	frequency := make(map[byte]int, len(hand))
+	for i := range hand {
+		frequency[hand[i]]++
 	}
 	maxFreq := 0
 	for _, v := range frequency {
@@ -81,7 +87,7 @@ func parseHandType(handVal []byte) (ht handType) {
 	return
 }
 
-func parseHandValues(hand string) []byte {
+func parseHandValues(hand string) string {
 	var parsed []byte
 	for i := range hand {
 		switch hand[i] {
@@ -99,7 +105,26 @@ func parseHandValues(hand string) []byte {
 			parsed = append(parsed, hand[i]-'1')
 		}
 	}
-	return parsed
+	return string(parsed)
+}
+
+func sortHands(hands []hand) []hand {
+	slices.SortFunc(hands, func(a, b hand) int {
+		if n := cmp.Compare(a.handType, b.handType); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.cmp, b.cmp)
+	})
+	return hands
+}
+
+func calculateWinnings(hands []hand) int {
+	sortedHands := sortHands(hands)
+	res := 0
+	for i, hand := range sortedHands {
+		res += (i + 1) * hand.bid
+	}
+	return res
 }
 
 func solve(input string) {
@@ -119,7 +144,8 @@ func solve(input string) {
 		hands = append(hands, hand)
 	}
 
-	fmt.Println(hands)
+	winnings := calculateWinnings(hands)
+	fmt.Println("Part 1 solution:", winnings) // 247823654
 }
 
 func main() {
